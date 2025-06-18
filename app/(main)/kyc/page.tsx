@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+// TypeScript: Extend window to include SUMSUBKYC
+declare global {
+  interface Window {
+    SUMSUBKYC?: any;
+  }
+}
+
 // TODO: Connect to Supabase and new KYC Provider API
 // TODO: Add stepper logic and form validation
 
@@ -73,6 +80,49 @@ const KycPage = () => {
       alert(err.message || "KYC submission failed");
     }
   };
+
+  // Dynamically load the Sumsub WebSDK script from CDN if not already loaded
+  function loadSumsubSdk(callback: () => void) {
+    if (window.SUMSUBKYC) {
+      callback();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://static.sumsub.com/idensic/static/sumsub-kyc-sdk-1.0.0.js';
+    script.async = true;
+    script.onload = callback;
+    document.body.appendChild(script);
+  }
+
+  // Example Sumsub KYC integration (client-side)
+  async function startSumsubKyc(userId: string) {
+    // Call your API route to get a Sumsub access token
+    const res = await fetch('/api/kyc/sumsub', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ externalUserId: userId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to get Sumsub token');
+    const { token } = data;
+
+    loadSumsubSdk(() => {
+      if (window.SUMSUBKYC) {
+        window.SUMSUBKYC.init(
+          {
+            lang: 'en',
+            accessToken: token,
+            onMessage: (type: string, payload: any) => {
+              // handle events
+            },
+            onError: (error: any) => {
+              // handle errors
+            },
+          }
+        ).launch('#sumsub-kyc-container');
+      }
+    });
+  }
 
   return (
     <div className="max-w-lg mx-auto py-10">
@@ -165,6 +215,8 @@ const KycPage = () => {
           {status === "pending_review" && (
             <div className="mt-6 text-yellow-600 font-medium">Your KYC is under review. We'll notify you once it's complete.</div>
           )}
+          {/* Sumsub KYC Container */}
+          <div id="sumsub-kyc-container"></div>
         </CardContent>
       </Card>
     </div>
