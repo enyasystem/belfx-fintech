@@ -123,16 +123,28 @@ export default function DashboardPage() {
       alert("Error checking KYC status. Please try again.");
       return;
     }
+    // Allow resubmission if rejected, otherwise block duplicate
     if (existing && ["pending_review", "approved", "pending_submission"].includes(existing.status)) {
       alert("You already have a KYC request in progress or approved.");
       return;
     }
-    // 2. Notify admin (create a pending KYC request in DB)
-    const { error: insertError } = await supabase
-      .from("kyc_requests")
-      .insert({ user_id: userId, status: "pending_review" });
-    if (insertError) {
-      alert("Failed to create KYC request: " + insertError.message);
+    let dbError = null;
+    if (existing && existing.status === "rejected") {
+      // Update the existing row to pending_review
+      const { error: updateError } = await supabase
+        .from("kyc_requests")
+        .update({ status: "pending_review" })
+        .eq("id", existing.id);
+      dbError = updateError;
+    } else {
+      // Insert new request
+      const { error: insertError } = await supabase
+        .from("kyc_requests")
+        .insert({ user_id: userId, status: "pending_review" });
+      dbError = insertError;
+    }
+    if (dbError) {
+      alert("Failed to create or update KYC request: " + dbError.message);
       return;
     }
     // 3. Fetch Sumsub token from your API
