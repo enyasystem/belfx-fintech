@@ -108,6 +108,70 @@ export default function DashboardPage() {
     )
   })
 
+  // Add this function to launch Sumsub KYC and notify admin
+  async function handleStartKyc(userId: string) {
+    const supabase = createClient();
+    // 1. Check for existing KYC request
+    const { data: existing, error: fetchError } = await supabase
+      .from("kyc_requests")
+      .select("id, status")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (fetchError) {
+      alert("Error checking KYC status. Please try again.");
+      return;
+    }
+    if (existing && ["pending_review", "approved", "pending_submission"].includes(existing.status)) {
+      alert("You already have a KYC request in progress or approved.");
+      return;
+    }
+    // 2. Notify admin (create a pending KYC request in DB)
+    const { error: insertError } = await supabase
+      .from("kyc_requests")
+      .insert({ user_id: userId, status: "pending_review" });
+    if (insertError) {
+      alert("Failed to create KYC request: " + insertError.message);
+      return;
+    }
+    // 3. Fetch Sumsub token from your API
+    let res;
+    try {
+      res = await fetch("/api/kyc/sumsub", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ externalUserId: userId }),
+      });
+    } catch (err) {
+      alert("Could not reach KYC API endpoint. If you are running a static export, this endpoint will not be available. Please deploy your API route or use a serverless backend.");
+      return;
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Failed to start KYC. API route not found or error occurred.");
+      return;
+    }
+    const { token } = await res.json();
+    // 4. Load Sumsub SDK and launch
+    function loadSumsubSdk(callback: () => void) {
+      if (window.SUMSUBKYC) return callback();
+      const script = document.createElement("script");
+      script.src = "https://static.sumsub.com/idensic/static/sumsub-kyc-sdk-1.0.0.js";
+      script.async = true;
+      script.onload = callback;
+      document.body.appendChild(script);
+    }
+    loadSumsubSdk(() => {
+      window.SUMSUBKYC.init({
+        lang: "en",
+        accessToken: token,
+        onMessage: (type: string, payload: any) => {},
+        onError: (error: any) => { alert("KYC error: " + error.message); },
+      }).launch("#sumsub-kyc-container");
+    });
+  }
+
   if (loading) {
     return <div className="p-8 text-center">Loading...</div>
   }
@@ -166,12 +230,14 @@ export default function DashboardPage() {
                     : "Please complete your KYC verification to access all platform features, including trading and withdrawals."}
               </p>
               {kycStatus !== "pending_review" && (
-                <Link href="/kyc">
-                  <Button size="sm" className="bg-yellow-400 text-belfx_navy-DEFAULT hover:bg-yellow-300">
-                    {kycStatus === "rejected" ? "Resubmit KYC" : "Complete KYC Now"}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
+                <Button
+                  size="sm"
+                  className="bg-yellow-400 text-belfx_navy-DEFAULT hover:bg-yellow-300"
+                  onClick={() => userId && handleStartKyc(userId)}
+                >
+                  {kycStatus === "rejected" ? "Resubmit KYC" : "Complete KYC Now"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               )}
             </CardContent>
           </Card>
@@ -353,6 +419,7 @@ export default function DashboardPage() {
             )}
           </Card>
         </section>
+        <div id="sumsub-kyc-container"></div>
       </main>
     </div>
   )
