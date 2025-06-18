@@ -1,0 +1,12 @@
+
+<script>
+fetch("https://kwegofx.com/api/kyc/sumsub-token.php", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ externalUserId: "test-user-001" })
+})
+  .then(res => res.json())
+  .then(data => console.log("KYC Token:", data))
+  .catch(err => console.error("Error:", err));
+
+</script>
