@@ -1,6 +1,4 @@
-import { cookies } from "next/headers"
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +12,7 @@ import type {
   KycRequest,
 } from "@/types/supabase"
 import { format } from "date-fns"
+import { createClient } from "@/lib/supabase/client"
 
 // Helper function to format currency
 const formatCurrency = (amount: number | undefined | null, currency: string) => {
@@ -23,99 +22,70 @@ const formatCurrency = (amount: number | undefined | null, currency: string) => 
   return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(numericAmount)
 }
 
-export default async function DashboardPage() {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+export default function DashboardPage() {
+  const [session, setSession] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [profile, setProfile] = useState<ProfileRow | null>(null)
+  const [wallets, setWallets] = useState<WalletType[]>([])
+  const [transactions, setTransactions] = useState<TransactionType[]>([])
+  const [kycRequest, setKycRequest] = useState<Pick<KycRequest, "status"> | null>(null)
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setUserId(data.session?.user?.id ?? null)
+      setLoading(false)
+    })
+  }, [])
 
-  if (!session) {
-    // This redirect protects the page if accessed without a session
-    redirect("/login?message=Please log in to view the dashboard.")
-  }
+  useEffect(() => {
+    if (!userId) return
 
-  const userId = session.user.id
+    const supabase = createClient()
+    const fetchData = async () => {
+      try {
+        const profileData = await supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("id", userId)
+          .single<ProfileRow>()
 
-  // Fetch profile, wallets, transactions, KYC status as before
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("full_name, avatar_url")
-    .eq("id", userId)
-    .single<ProfileRow>()
+        const walletsData = await supabase
+          .from("wallets")
+          .select("*")
+          .eq("user_id", userId)
+          .order("currency_code")
+          .returns<WalletType[]>()
 
-  const { data: wallets, error: walletsError } = await supabase
-    .from("wallets")
-    .select("*")
-    .eq("user_id", userId)
-    .order("currency_code")
-    .returns<WalletType[]>()
+        const transactionsData = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(5)
+          .returns<TransactionType[]>()
 
-  const { data: transactions, error: transactionsError } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(5)
-    .returns<TransactionType[]>()
+        const kycRequestData = await supabase
+          .from("kyc_requests")
+          .select("status")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle<Pick<KycRequest, "status">>()
 
-  const { data: kycRequest, error: kycError } = await supabase
-    .from("kyc_requests")
-    .select("status")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<Pick<KycRequest, "status">>()
-
-  // Log errors if they occur
-  if (profileError && profileError.code !== "PGRST116") {
-    console.error("Dashboard - Error fetching profile:", profileError.message)
-  }
-  if (walletsError) {
-    console.error("Dashboard - Error fetching wallets:", walletsError.message)
-  }
-  if (transactionsError) {
-    console.error("Dashboard - Error fetching transactions:", transactionsError.message)
-  }
-  if (kycError) {
-    console.error("Dashboard - Error fetching KYC status:", kycError.message)
-  }
-
-  const handleLogout = async () => {
-    "use server"
-    console.log("Logout Action - Initiated.")
-
-    try {
-      const cookieStore = cookies()
-      const supabaseActionClient = createClient(cookieStore)
-
-      // Step 1: Attempt to sign the user out with Supabase.
-      // The 'await' keyword ensures this operation attempts to complete before proceeding.
-      console.log("Logout Action - Attempting supabase.auth.signOut()...")
-      const { error: signOutError } = await supabaseActionClient.auth.signOut()
-
-      if (signOutError) {
-        // Log the error but proceed to redirect as per user requirement.
-        console.warn("Logout Action - supabase.auth.signOut() reported an issue:", signOutError.message)
-      } else {
-        console.log("Logout Action - supabase.auth.signOut() completed successfully.")
+        setProfile(profileData.data ?? null)
+        setWallets(walletsData.data ?? [])
+        setTransactions(transactionsData.data ?? [])
+        setKycRequest(kycRequestData.data ?? null)
+      } catch (error) {
+        console.error("Error fetching data:", error)
       }
-    } catch (e: unknown) {
-      // Catch any unexpected errors during the Supabase sign-out process.
-      let errorMessage = "An unknown error occurred during Supabase sign-out"
-      if (e instanceof Error) {
-        errorMessage = e.message
-      }
-      console.error("Logout Action - A critical error occurred during Supabase operations:", errorMessage)
-      // Even if an error occurs here, proceed to redirect to ensure user is off the dashboard.
     }
 
-    // Step 2: After the sign-out attempt (successful or not), redirect to the homepage.
-    // This line is only reached after the try...catch block above has finished.
-    console.log("Logout Action - Attempting redirect to /")
-    redirect("/")
-  }
+    fetchData()
+  }, [userId])
 
   const kycStatus = kycRequest?.status || "pending_submission"
   const isKycApproved = kycStatus === "approved"
@@ -135,6 +105,17 @@ export default async function DashboardPage() {
       }
     )
   })
+
+  if (loading) {
+    return <div className="p-8 text-center">Loading...</div>
+  }
+
+  if (!session) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/login?message=Please log in to view the dashboard."
+    }
+    return null
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-belfx_navy-light text-white">
