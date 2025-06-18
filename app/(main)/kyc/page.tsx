@@ -67,13 +67,13 @@ const KycPage = () => {
       //   method: "POST",
       //   body: formData,
       // });
-      const res = { ok: true }; // Placeholder response
-      const data = await res.json();
+      const res = { ok: true };
+      const data = {}; // No .json() call on mock object
       if (res.ok) {
         setStatus("pending_review");
       } else {
         setStatus("rejected");
-        alert(data.error || "KYC submission failed");
+        alert("KYC submission failed");
       }
     } catch (err: any) {
       setStatus("rejected");
