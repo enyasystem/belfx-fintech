@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -129,15 +131,18 @@ export default function DashboardPage() {
             <span className="text-sm text-gray-300 hidden md:inline">
               Welcome, {profile?.full_name || session?.user?.email}
             </span>
-            <form action={handleLogout}>
-              <Button
-                type="submit"
-                variant="outline"
-                className="text-belfx_gold-DEFAULT border-belfx_gold-DEFAULT hover:bg-belfx_gold-DEFAULT hover:text-belfx_navy-DEFAULT"
-              >
-                Logout
-              </Button>
-            </form>
+            <Button
+              variant="outline"
+              className="text-belfx_gold-DEFAULT border-belfx_gold-DEFAULT hover:bg-belfx_gold-DEFAULT hover:text-belfx_navy-DEFAULT"
+              onClick={() => {
+                const supabase = createClient()
+                supabase.auth.signOut().then(() => {
+                  window.location.href = "/login?message=You have been logged out."
+                })
+              }}
+            >
+              Logout
+            </Button>
           </div>
         </div>
       </header>
@@ -221,8 +226,7 @@ export default function DashboardPage() {
         {/* Wallet Overview */}
         <section className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-100 mb-4">Wallet Overview</h2>
-          {walletsError && <p className="text-red-400">Could not load wallet data.</p>}
-          {!walletsError && displayWallets.length === 0 && (
+          {!displayWallets.length && (
             <p className="text-gray-400">No wallets found. Wallets will be created upon first deposit.</p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -275,8 +279,7 @@ export default function DashboardPage() {
           <h2 className="text-2xl font-semibold text-gray-100 mb-4">Recent Activity</h2>
           <Card className="bg-belfx_navy-DEFAULT shadow-lg">
             <CardContent className="p-0">
-              {transactionsError && <p className="text-red-400 p-4">Could not load transaction data.</p>}
-              {!transactionsError && (!transactions || transactions.length === 0) && (
+              {!transactions.length && (
                 <p className="text-gray-400 p-6 text-center">No recent transactions found.</p>
               )}
               {transactions && transactions.length > 0 && (
