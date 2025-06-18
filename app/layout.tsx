@@ -25,10 +25,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
-      {" "}
       {/* Apply variable here */}
       <body className="font-sans">
-        {" "}
         {/* Use Tailwind's font-sans utility which refers to --font-inter */}
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           {children}
