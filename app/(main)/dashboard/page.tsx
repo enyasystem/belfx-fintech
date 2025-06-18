@@ -150,7 +150,7 @@ export default function DashboardPage() {
     // 3. Fetch Sumsub token from your API
     let res;
     try {
-      res = await fetch("/api/kyc/sumsub", {
+      res = await fetch("https://kwegofx.com/api/kyc/sumsub-token.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ externalUserId: userId }),
