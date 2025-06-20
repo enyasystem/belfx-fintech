@@ -123,21 +123,18 @@ export default function DashboardPage() {
       alert("Error checking KYC status. Please try again.");
       return;
     }
-    // Allow resubmission if rejected, otherwise block duplicate
     if (existing && ["pending_review", "approved", "pending_submission"].includes(existing.status)) {
       alert("You already have a KYC request in progress or approved.");
       return;
     }
     let dbError = null;
     if (existing && existing.status === "rejected") {
-      // Update the existing row to pending_review
       const { error: updateError } = await supabase
         .from("kyc_requests")
         .update({ status: "pending_review" })
         .eq("id", existing.id);
       dbError = updateError;
     } else {
-      // Insert new request
       const { error: insertError } = await supabase
         .from("kyc_requests")
         .insert({ user_id: userId, status: "pending_review" });
@@ -147,13 +144,24 @@ export default function DashboardPage() {
       alert("Failed to create or update KYC request: " + dbError.message);
       return;
     }
+    // Prompt user for phone number
+    const phone = prompt("Please enter your phone number for KYC verification:");
+    if (!phone) {
+      alert("Phone number is required for KYC.");
+      return;
+    }
     // 3. Fetch Sumsub token from your API
     let res;
     try {
       res = await fetch("https://kwegofx.com/api/kyc/sumsub-token.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ externalUserId: userId }),
+        body: JSON.stringify({
+          externalUserId: userId,
+          email: session?.user?.email,
+          phone,
+          levelName: "Verify"
+        }),
       });
     } catch (err) {
       alert("Could not reach KYC API endpoint. If you are running a static export, this endpoint will not be available. Please deploy your API route or use a serverless backend.");

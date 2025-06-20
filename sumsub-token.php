@@ -31,10 +31,11 @@ $phone = $input['phone'];
 $levelName = $input['levelName'];
 
 // Sumsub credentials
-$SUMSUB_APP_TOKEN  = 'sbx:syTel0NAQB0wcirvod05xTQZ.HkwR5Yeu7RGFHhjBBGn7uZzpooEmVzxM'; // Replace with your real token
+$SUMSUB_APP_TOKEN  = 'sbx:m8VVPW4mq2RcgssY2j355jLR.c5JRgFyzJWyQ7lDFKcaWQxkXENH3sYO6'; // Replace with your real token
+$SUMSUB_SECRET_KEY = '5l1BEq5EhCikpQ9mZ9mW4IQhdMgEa0Ns'; // NOT the app token
 
 $url = "https://api.sumsub.com/resources/accessTokens/sdk";
-$body = json_encode([
+$bodyArray = [
     'applicantIdentifiers' => [
         'email' => $email,
         'phone' => $phone
@@ -43,12 +44,26 @@ $body = json_encode([
     'userId' => $externalUserId,
     'levelName' => $levelName,
     'externalActionId' => $externalUserId
-]);
+];
+$body = json_encode($bodyArray, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+$ts = time();
+$method = 'POST';
+$path = '/resources/accessTokens/sdk';
+$stringToSign = $ts . "\n" . $method . "\n" . $path . "\n" . $body;
+$signature = hash_hmac('sha256', $stringToSign, $SUMSUB_SECRET_KEY);
+
+// Debug output
+error_log('String to sign: ' . $stringToSign);
+error_log('Signature: ' . $signature);
+error_log('Body: ' . $body);
 
 $opts = [
     'http' => [
         'method'  => 'POST',
         'header'  => "X-App-Token: $SUMSUB_APP_TOKEN\r\n" .
+                     "X-App-Access-Sig: $signature\r\n" .
+                     "X-App-Access-Ts: $ts\r\n" .
                      "Content-Type: application/json\r\n",
         'content' => $body,
         'ignore_errors' => true
